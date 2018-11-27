@@ -8,6 +8,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+library(modelr)
 ```
 
 ```{r, message = FALSE, warning = FALSE}
@@ -38,7 +39,7 @@ fit_logistic %>%
   mutate(OR = exp(estimate),
          OR_upper_bound = exp(estimate + 1.96*std.error),
          OR_lower_bound = exp(estimate - 1.96*std.error)) %>%
-  select(term, log_OR = estimate, OR, p.value) %>% 
+  select(term, starts_with("OR")) %>% 
   knitr::kable(digits = 3)
 ```
 
@@ -54,13 +55,74 @@ city_glm =
   mutate(OR = exp(estimate),
          OR_upper_bound = exp(estimate + 1.96*std.error),
          OR_lower_bound = exp(estimate - 1.96*std.error)) %>% 
-  select(term, log_OR = estimate, OR, p.value) %>% 
-  knitr::kable(digits = 3)
+  select(city_state, term, starts_with("OR")) %>% 
+  filter(term == "victim_raceNon-white") 
 ```
 
 ```{r}
-birthweight_df = read_csv("./data/birthweight.csv")
+city_glm %>%
+  mutate(city_state = fct_reorder(city_state, OR)) %>%
+  ggplot(aes(x = city_state, y = OR)) +
+    geom_point() +
+    coord_flip() +
+    geom_errorbar(aes(ymin = OR_lower_bound, ymax = OR_upper_bound)) +
+    labs(x = "Location", y = "Odds Ratio", title = "Odds Ratios of Non-white Homicides being Resolved Compared to White Homicides")
+```
+
+
+```{r, message = FALSE}
+birthweight_df = read_csv("./data/birthweight.csv") %>%
+  mutate(babysex = as.factor(babysex),
+         malform = as.factor(malform),
+         frace = as.factor(frace),
+         mrace = as.factor(mrace)) 
   
+```
+
+```{r}
+birthweight_model_1 = lm(bwt ~ ppwt + momage + fincome + smoken + babysex, data = birthweight_df)
+
+birthweight_df %>%
+  add_predictions(., birthweight_model_1) %>%
+  add_residuals(., birthweight_model_1) %>%
+  ggplot(aes(x = pred, y = resid)) + 
+    geom_point() +
+    geom_hline(yintercept = 0, color = "red") +
+    labs(x = "Fitted Values", y = "Residuals", title = "Residual vs Fit Plot for My Model") +
+    theme_bw()
+```
+
+For this regression, I chose to look at mother's weight, age, income, smoking status and the baby's sex as predictors of birthweight. Research has suggested that all of these factors may play a role in influencing a baby's birth weight. The residual graph shows a general concentration of values around 0 however there are quite a few outliers, suggesting that there are some things this model is not accounting for.
+
+```{r}
+birthweight_model_2 = lm(bwt ~ blength + gaweeks, data = birthweight_df)
+birthweight_model_3 = lm(bwt ~ bhead + blength + babysex + bhead * blength  + bhead * babysex + blength * babysex + bhead * blength * babysex, data = birthweight_df)
+```
+
+
+```{r}
+crossv_df =
+  crossv_mc(birthweight_df, 100) %>% 
+  mutate(train = map(train, as_tibble),
+         test = map(test, as_tibble)) %>%
+  mutate(birthweight_model_1 = map(train, ~ lm(bwt ~ ppwt + momage + fincome + smoken + babysex, data = birthweight_df)),
+         birthweight_model_2 = map(train, ~ lm(bwt ~ blength + gaweeks, data = birthweight_df)),
+         birthweight_model_3 = map(train, ~ lm(bwt ~ bhead + blength + babysex + bhead * blength  + bhead * babysex + blength * babysex + bhead * blength * babysex, data = birthweight_df))) %>% 
+  mutate(rmse_1 = map2_dbl(birthweight_model_1, test, ~ rmse(model = .x, data = .y)),
+         rmse_2 = map2_dbl(birthweight_model_2, test, ~ rmse(model = .x, data = .y)),
+         rmse_3 = map2_dbl(birthweight_model_3, test, ~ rmse(model = .x, data = .y)))
+```
+
+```{r}
+crossv_df %>% 
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+    geom_violin() +
+    theme_bw() +
+    labs(x = "Model", y = "RMSE", title = "RMSE Distribution for Different Models")
 ```
 
 
