@@ -130,26 +130,25 @@ $(document).ready(function () {
 <pre class="r"><code>url = &quot;https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv&quot;
 raw_data = read_csv(url) %&gt;% 
   mutate(city_state = str_c(city, &quot;,&quot;, &quot; &quot;, state)) %&gt;% 
-  mutate(homicide_solved = case_when(disposition == &quot;Closed without arrest&quot; | disposition == &quot;Open/No arrest&quot; ~ &quot;unresolved&quot;, disposition == &quot;Closed by arrest&quot; ~ &quot;resolved&quot;)) %&gt;% 
-  filter(!city_state %in% c(&quot;Tulsa, AL&quot;, &quot;Dallas, TX&quot;, &quot;Phoenix, AZ&quot;, &quot;Kansas City, MO&quot;)) %&gt;% 
-  mutate(race_cat = case_when(victim_race == &quot;White&quot; ~ &quot;White&quot;, victim_race == &quot;Asian&quot; | victim_race == &quot;Black&quot; | victim_race == &quot;Hispanic&quot; | victim_race == &quot;Other&quot; ~ &quot;Non-white&quot;)) %&gt;% 
-  mutate(victim_age = as.numeric(victim_age),
-         race_cat = fct_relevel(race_cat, &quot;White&quot;))</code></pre>
+  mutate(resolved = as.numeric(disposition == &quot;Closed by arrest&quot;),
+         victim_age = as.numeric(victim_age),
+         victim_race = ifelse(victim_race == &quot;White&quot;, c(&quot;White&quot;), c(&quot;Non-white&quot;)),
+         victim_race = fct_relevel(victim_race, &quot;White&quot;)) %&gt;% 
+  filter(!city_state %in% c(&quot;Tulsa, AL&quot;, &quot;Dallas, TX&quot;, &quot;Phoenix, AZ&quot;, &quot;Kansas City, MO&quot;))</code></pre>
 <pre class="r"><code>baltimore_df = 
   raw_data %&gt;% 
   filter(city_state == &quot;Baltimore, MD&quot;) %&gt;% 
-  mutate(resolved = as.numeric(disposition == &quot;Closed by arrest&quot;)) %&gt;% 
-  mutate(victim_age = as.numeric(victim_age),
-         race_cat = fct_relevel(race_cat, &quot;White&quot;)) %&gt;% 
-  select(resolved, victim_age, race_cat, victim_sex)
+  select(resolved, victim_age, victim_race, victim_sex)
 
 fit_logistic = 
   baltimore_df %&gt;% 
-  glm(resolved ~ victim_age + race_cat + victim_sex, data = ., family = binomial())
+  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial())
 
 fit_logistic %&gt;% 
   broom::tidy() %&gt;% 
-  mutate(OR = exp(estimate)) %&gt;%
+  mutate(OR = exp(estimate),
+         OR_upper_bound = exp(estimate + 1.96*std.error),
+         OR_lower_bound = exp(estimate - 1.96*std.error)) %&gt;%
   select(term, log_OR = estimate, OR, p.value) %&gt;% 
   knitr::kable(digits = 3)</code></pre>
 <table>
@@ -175,7 +174,7 @@ fit_logistic %&gt;%
 <td align="right">0.032</td>
 </tr>
 <tr class="odd">
-<td align="left">race_catNon-white</td>
+<td align="left">victim_raceNon-white</td>
 <td align="right">-0.820</td>
 <td align="right">0.441</td>
 <td align="right">0.000</td>
@@ -188,6 +187,28 @@ fit_logistic %&gt;%
 </tr>
 </tbody>
 </table>
+<pre class="r"><code>city_glm = 
+  raw_data %&gt;% 
+  group_by(city_state) %&gt;% 
+  nest() %&gt;% 
+  mutate(models = map(data, ~glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial())),
+         models = map(models, broom::tidy)) %&gt;% 
+  select(-data) %&gt;%
+  unnest() %&gt;% 
+  mutate(OR = exp(estimate),
+         OR_upper_bound = exp(estimate + 1.96*std.error),
+         OR_lower_bound = exp(estimate - 1.96*std.error)) %&gt;% 
+  select(term, log_OR = estimate, OR, p.value) %&gt;% 
+  knitr::kable(digits = 3)</code></pre>
+<pre class="r"><code>birthweight_df = read_csv(&quot;./data/birthweight.csv&quot;)</code></pre>
+<pre><code>## Parsed with column specification:
+## cols(
+##   .default = col_integer(),
+##   gaweeks = col_double(),
+##   ppbmi = col_double(),
+##   smoken = col_double()
+## )</code></pre>
+<pre><code>## See spec(...) for full column specifications.</code></pre>
 
 
 
