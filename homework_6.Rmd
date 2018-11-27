@@ -16,8 +16,9 @@ raw_data = read_csv(url) %>%
   mutate(city_state = str_c(city, ",", " ", state)) %>% 
   mutate(homicide_solved = case_when(disposition == "Closed without arrest" | disposition == "Open/No arrest" ~ "unresolved", disposition == "Closed by arrest" ~ "resolved")) %>% 
   filter(!city_state %in% c("Tulsa, AL", "Dallas, TX", "Phoenix, AZ", "Kansas City, MO")) %>% 
+  mutate(race_cat = case_when(victim_race == "White" ~ "White", victim_race == "Asian" | victim_race == "Black" | victim_race == "Hispanic" | victim_race == "Other" ~ "Non-white")) %>% 
   mutate(victim_age = as.numeric(victim_age),
-         victim_race = fct_relevel(victim_race, "White"))
+         race_cat = fct_relevel(race_cat, "White"))
 
 ```
 
@@ -26,14 +27,14 @@ raw_data = read_csv(url) %>%
 baltimore_df = 
   raw_data %>% 
   filter(city_state == "Baltimore, MD") %>% 
-  mutate(resolved = as.numeric(disposition == "Closed by arrest"),
-         victim_age = as.numeric(victim_age),
-         victim_race = fct_relevel(victim_race, "White")) %>% 
-  select(resolved, victim_age, victim_race, victim_sex)
+  mutate(resolved = as.numeric(disposition == "Closed by arrest")) %>% 
+  mutate(victim_age = as.numeric(victim_age),
+         race_cat = fct_relevel(race_cat, "White")) %>% 
+  select(resolved, victim_age, race_cat, victim_sex)
 
 fit_logistic = 
   baltimore_df %>% 
-  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial())
+  glm(resolved ~ victim_age + race_cat + victim_sex, data = ., family = binomial())
 
 fit_logistic %>% 
   broom::tidy() %>% 
@@ -41,5 +42,29 @@ fit_logistic %>%
   select(term, log_OR = estimate, OR, p.value) %>% 
   knitr::kable(digits = 3)
 ```
+
+```{r}
+city_glm = 
+  raw_data %>% 
+  mutate(resolved = as.numeric(disposition == "Closed by arrest")) %>% 
+  mutate(victim_age = as.numeric(victim_age),
+         race_cat = fct_relevel(race_cat, "White")) %>% 
+  select(resolved, victim_age, race_cat, victim_sex) %>%  
+  mutate(models = map2(., ~glm(resolved ~ victim_age + race_cat + victim_sex, data = ., family = binomial())))
+```
+
+
+city_props = 
+  status_totals %>% 
+  mutate(prop = map2(unsolved, total, prop.test)) %>% 
+  mutate(prop = map(prop, broom::tidy)) %>% 
+  unnest() %>% 
+  select(estimate, conf.low, conf.high) 
+
+
+mutate(models = map(data, ~lm(price ~ stars + room_type, data = .x)),
+         models = map(models, broom::tidy))
+
+
 
 

@@ -132,19 +132,20 @@ raw_data = read_csv(url) %&gt;%
   mutate(city_state = str_c(city, &quot;,&quot;, &quot; &quot;, state)) %&gt;% 
   mutate(homicide_solved = case_when(disposition == &quot;Closed without arrest&quot; | disposition == &quot;Open/No arrest&quot; ~ &quot;unresolved&quot;, disposition == &quot;Closed by arrest&quot; ~ &quot;resolved&quot;)) %&gt;% 
   filter(!city_state %in% c(&quot;Tulsa, AL&quot;, &quot;Dallas, TX&quot;, &quot;Phoenix, AZ&quot;, &quot;Kansas City, MO&quot;)) %&gt;% 
+  mutate(race_cat = case_when(victim_race == &quot;White&quot; ~ &quot;White&quot;, victim_race == &quot;Asian&quot; | victim_race == &quot;Black&quot; | victim_race == &quot;Hispanic&quot; | victim_race == &quot;Other&quot; ~ &quot;Non-white&quot;)) %&gt;% 
   mutate(victim_age = as.numeric(victim_age),
-         victim_race = fct_relevel(victim_race, &quot;White&quot;))</code></pre>
+         race_cat = fct_relevel(race_cat, &quot;White&quot;))</code></pre>
 <pre class="r"><code>baltimore_df = 
   raw_data %&gt;% 
   filter(city_state == &quot;Baltimore, MD&quot;) %&gt;% 
-  mutate(resolved = as.numeric(disposition == &quot;Closed by arrest&quot;),
-         victim_age = as.numeric(victim_age),
-         victim_race = fct_relevel(victim_race, &quot;White&quot;)) %&gt;% 
-  select(resolved, victim_age, victim_race, victim_sex)
+  mutate(resolved = as.numeric(disposition == &quot;Closed by arrest&quot;)) %&gt;% 
+  mutate(victim_age = as.numeric(victim_age),
+         race_cat = fct_relevel(race_cat, &quot;White&quot;)) %&gt;% 
+  select(resolved, victim_age, race_cat, victim_sex)
 
 fit_logistic = 
   baltimore_df %&gt;% 
-  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial())
+  glm(resolved ~ victim_age + race_cat + victim_sex, data = ., family = binomial())
 
 fit_logistic %&gt;% 
   broom::tidy() %&gt;% 
@@ -163,44 +164,26 @@ fit_logistic %&gt;%
 <tbody>
 <tr class="odd">
 <td align="left">(Intercept)</td>
-<td align="right">1.190</td>
-<td align="right">3.287</td>
+<td align="right">1.186</td>
+<td align="right">3.274</td>
 <td align="right">0.000</td>
 </tr>
 <tr class="even">
 <td align="left">victim_age</td>
 <td align="right">-0.007</td>
 <td align="right">0.993</td>
-<td align="right">0.027</td>
+<td align="right">0.032</td>
 </tr>
 <tr class="odd">
-<td align="left">victim_raceAsian</td>
-<td align="right">0.296</td>
-<td align="right">1.345</td>
-<td align="right">0.653</td>
-</tr>
-<tr class="even">
-<td align="left">victim_raceBlack</td>
-<td align="right">-0.842</td>
-<td align="right">0.431</td>
+<td align="left">race_catNon-white</td>
+<td align="right">-0.820</td>
+<td align="right">0.441</td>
 <td align="right">0.000</td>
 </tr>
-<tr class="odd">
-<td align="left">victim_raceHispanic</td>
-<td align="right">-0.265</td>
-<td align="right">0.767</td>
-<td align="right">0.402</td>
-</tr>
 <tr class="even">
-<td align="left">victim_raceOther</td>
-<td align="right">-0.768</td>
-<td align="right">0.464</td>
-<td align="right">0.385</td>
-</tr>
-<tr class="odd">
 <td align="left">victim_sexMale</td>
-<td align="right">-0.880</td>
-<td align="right">0.415</td>
+<td align="right">-0.888</td>
+<td align="right">0.412</td>
 <td align="right">0.000</td>
 </tr>
 </tbody>
