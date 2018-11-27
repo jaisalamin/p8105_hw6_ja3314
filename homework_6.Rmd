@@ -1,0 +1,45 @@
+---
+title: "P8105_hw6_ja3314"
+author: "Jaisal Amin"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+```{r, message = FALSE, warning = FALSE}
+url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
+raw_data = read_csv(url) %>% 
+  mutate(city_state = str_c(city, ",", " ", state)) %>% 
+  mutate(homicide_solved = case_when(disposition == "Closed without arrest" | disposition == "Open/No arrest" ~ "unresolved", disposition == "Closed by arrest" ~ "resolved")) %>% 
+  filter(!city_state %in% c("Tulsa, AL", "Dallas, TX", "Phoenix, AZ", "Kansas City, MO")) %>% 
+  mutate(victim_age = as.numeric(victim_age),
+         victim_race = fct_relevel(victim_race, "White"))
+
+```
+
+
+```{r}
+baltimore_df = 
+  raw_data %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  mutate(resolved = as.numeric(disposition == "Closed by arrest"),
+         victim_age = as.numeric(victim_age),
+         victim_race = fct_relevel(victim_race, "White")) %>% 
+  select(resolved, victim_age, victim_race, victim_sex)
+
+fit_logistic = 
+  baltimore_df %>% 
+  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial())
+
+fit_logistic %>% 
+  broom::tidy() %>% 
+  mutate(OR = exp(estimate)) %>%
+  select(term, log_OR = estimate, OR, p.value) %>% 
+  knitr::kable(digits = 3)
+```
+
+
