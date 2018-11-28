@@ -11,6 +11,10 @@ library(tidyverse)
 library(modelr)
 ```
 
+## Problem 1
+
+**Importing and cleaning the data :**
+
 ```{r, message = FALSE, warning = FALSE}
 url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
 raw_data = read_csv(url) %>% 
@@ -23,6 +27,7 @@ raw_data = read_csv(url) %>%
 
 ```
 
+**Fitting logistic regression for Baltimore:**
 
 ```{r}
 baltimore_df = 
@@ -34,14 +39,23 @@ fit_logistic =
   baltimore_df %>% 
   glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial())
 
+```
+
+**Making table with relevant info :**
+
+```{r}
 fit_logistic %>% 
   broom::tidy() %>% 
   mutate(OR = exp(estimate),
-         OR_upper_bound = exp(estimate + 1.96*std.error),
-         OR_lower_bound = exp(estimate - 1.96*std.error)) %>%
+         OR_lower_bound = exp(estimate - 1.96*std.error),
+         OR_upper_bound = exp(estimate + 1.96*std.error)) %>%
   select(term, starts_with("OR")) %>% 
   knitr::kable(digits = 3)
 ```
+
+Based on the values obtained, the odds of a homicide of a non-white victim being solved in Baltimore are 0.441 times the odds of a homicide of a white victim being resolved, all else being equal. We are 95% confidence that the true odds ratio falls between 0.313 and 0.620. 
+
+**Running regressions for all cities in dataset:**
 
 ```{r}
 city_glm = 
@@ -59,6 +73,8 @@ city_glm =
   filter(term == "victim_raceNon-white") 
 ```
 
+**Plotting odds ratios and confidence intervals:**
+
 ```{r}
 city_glm %>%
   mutate(city_state = fct_reorder(city_state, OR)) %>%
@@ -66,9 +82,14 @@ city_glm %>%
     geom_point() +
     coord_flip() +
     geom_errorbar(aes(ymin = OR_lower_bound, ymax = OR_upper_bound)) +
-    labs(x = "Location", y = "Odds Ratio", title = "Odds Ratios of Non-white Homicides being Resolved Compared to White Homicides")
+    labs(x = "City", y = "Odds Ratio", title = "Odds Ratios of Resolving Homicides in Non-white vs. White Victims")
 ```
 
+From looking at this plot, we see that the odds ratios of homicide resolution in non-white victims is lower than 1 for most cities, meaning that white victims are more likely to have their homicides resolved. Many confidence intervals include 1 but most range below 1.
+
+## Problem 2
+
+**Reading in data :**
 
 ```{r, message = FALSE}
 birthweight_df = read_csv("./data/birthweight.csv") %>%
@@ -79,6 +100,8 @@ birthweight_df = read_csv("./data/birthweight.csv") %>%
   
 ```
 
+**Creating first model and plotting residuals:**
+
 ```{r}
 birthweight_model_1 = lm(bwt ~ ppwt + momage + fincome + smoken + babysex, data = birthweight_df)
 
@@ -87,18 +110,19 @@ birthweight_df %>%
   add_residuals(., birthweight_model_1) %>%
   ggplot(aes(x = pred, y = resid)) + 
     geom_point() +
-    geom_hline(yintercept = 0, color = "red") +
-    labs(x = "Fitted Values", y = "Residuals", title = "Residual vs Fit Plot for My Model") +
-    theme_bw()
+    labs(x = "Fitted Values", y = "Residuals", title = "Residual vs Fit Plot")
 ```
 
 For this regression, I chose to look at mother's weight, age, income, smoking status and the baby's sex as predictors of birthweight. Research has suggested that all of these factors may play a role in influencing a baby's birth weight. The residual graph shows a general concentration of values around 0 however there are quite a few outliers, suggesting that there are some things this model is not accounting for.
+
+**Creating additional models:**
 
 ```{r}
 birthweight_model_2 = lm(bwt ~ blength + gaweeks, data = birthweight_df)
 birthweight_model_3 = lm(bwt ~ bhead + blength + babysex + bhead * blength  + bhead * babysex + blength * babysex + bhead * blength * babysex, data = birthweight_df)
 ```
 
+**Creating cross validation dataset:**
 
 ```{r}
 crossv_df =
@@ -113,6 +137,10 @@ crossv_df =
          rmse_3 = map2_dbl(birthweight_model_3, test, ~ rmse(model = .x, data = .y)))
 ```
 
+Here I created a cross validation dataset with 100 pairs for testing and training and calculated RMSEs.
+
+**Visualizing RMSE distributions:**
+
 ```{r}
 crossv_df %>% 
   select(starts_with("rmse")) %>% 
@@ -121,9 +149,10 @@ crossv_df %>%
          model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + 
     geom_violin() +
-    theme_bw() +
-    labs(x = "Model", y = "RMSE", title = "RMSE Distribution for Different Models")
+    labs(x = "Model", y = "RMSE", title = "RMSE Distribution")
 ```
+
+Here we can see that my first model is not the best predictor but models 2 and 3 are both decent predictive models.
 
 
 
